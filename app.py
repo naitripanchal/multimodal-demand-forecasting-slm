@@ -1,5 +1,6 @@
 import os
 import zipfile
+import tempfile
 import streamlit as st
 import joblib
 
@@ -8,37 +9,42 @@ st.set_page_config(page_title="Supply Chain Demand Forecasting", layout="wide")
 st.title("📦 Multi-Domain Supply Chain Demand Forecasting System")
 st.write("Dynamic inventory demand prediction powered by Small Language Model sentiment scoring and category-specific models.")
 
-# --- AUTOMATIC ZIP EXTRACTION FOR CLOUD DEPLOYMENT ---
-# If your zip files are named domain_models_batch1.zip and domain_models_batch2.zip
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-for batch_name in ["domain_models_batch1", "domain_models_batch2"]:
-    extracted_path = os.path.join(BASE_DIR, batch_name)
-    zip_path = os.path.join(BASE_DIR, f"{batch_name}.zip")
-    
-    # If the unzipped folder doesn't exist yet, but the zip file does, extract it!
-    if not os.path.exists(extracted_path) and os.path.exists(zip_path):
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(BASE_DIR)
+# Use a temp directory outside Streamlit's watched workspace to avoid infinite reboots
+TEMP_MODELS_DIR = os.path.join(tempfile.gettempdir(), "domain_models")
 
 @st.cache_resource
-def load_available_categories():
+def extract_and_load_models():
+    os.makedirs(TEMP_MODELS_DIR, exist_ok=True)
+    
+    # Extract zips into the temp directory if not already present
+    for batch_name in ["domain_models_batch1", "domain_models_batch2"]:
+        batch_extracted_path = os.path.join(TEMP_MODELS_DIR, batch_name)
+        zip_path = os.path.join(BASE_DIR, f"{batch_name}.zip")
+        
+        if not os.path.exists(batch_extracted_path) and os.path.exists(zip_path):
+            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                zip_ref.extractall(TEMP_MODELS_DIR)
+
+    # Scan for .pkl files in the temp directory
     pkl_files_map = {}
-    if os.path.exists(BASE_DIR):
-        for root, dirs, files in os.walk(BASE_DIR):
-            for f in files:
-                if f.endswith(".pkl"):
-                    clean_name = f.replace("_sentiment_model.pkl", "").replace(".pkl", "")
-                    clean_name = clean_name.replace("ts_", "").replace("all_", "").replace("_", " ")
-                    display_name = clean_name.title()
-                    pkl_files_map[display_name] = os.path.join(root, f)
+    for root, dirs, files in os.walk(TEMP_MODELS_DIR):
+        for f in files:
+            if f.endswith(".pkl"):
+                clean_name = f.replace("_sentiment_model.pkl", "").replace(".pkl", "")
+                clean_name = clean_name.replace("ts_", "").replace("all_", "").replace("_", " ")
+                display_name = clean_name.title()
+                pkl_files_map[display_name] = os.path.join(root, f)
+                
     return pkl_files_map
 
-category_map = load_available_categories()
+with st.spinner("Initializing models..."):
+    category_map = extract_and_load_models()
+
 categories = sorted(list(category_map.keys()))
 
 if not categories:
-    st.error(f"No model artifacts found! Please ensure your zip files are named `domain_models_batch1.zip` and `domain_models_batch2.zip` in the root folder.")
+    st.error("No model artifacts found! Please ensure your zip files are in the repository root.")
 else:
     selected_display_name = st.selectbox("Select Product Domain Category:", categories)
     selected_filepath = category_map[selected_display_name]
@@ -74,6 +80,6 @@ else:
                 
                 st.success("Forecast Generated Successfully!")
                 st.metric(label=f"Predicted Next-Week Demand ({selected_display_name})", value=f"{int(predicted_demand)} units")
-                st.info(f"Loaded from path: `{selected_filepath}` | Model expects: {n_features} feature(s)")
+                st.info(f"Loaded from path: `{selected_filepath}` | Model expects: {n_feats} feature(s)")
             else:
                 st.error(f"Could not find model file at: {selected_filepath}")
