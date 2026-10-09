@@ -1,21 +1,3 @@
-# Core ML & NLP
-transformers==4.40.2
-bitsandbytes
-accelerate
-
-# Modelling
-scikit-learn
-
-# Data
-pandas
-numpy
-
-# Visualisation
-matplotlib
-
-# Notebook
-jupyter
-ipykernel
 streamlit
 joblib
 scikit-learn
