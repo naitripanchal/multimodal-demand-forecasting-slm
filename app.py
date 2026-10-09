@@ -1,4 +1,5 @@
 import os
+import zipfile
 import streamlit as st
 import joblib
 
@@ -7,8 +8,18 @@ st.set_page_config(page_title="Supply Chain Demand Forecasting", layout="wide")
 st.title("📦 Multi-Domain Supply Chain Demand Forecasting System")
 st.write("Dynamic inventory demand prediction powered by Small Language Model sentiment scoring and category-specific models.")
 
-# --- SET YOUR ABSOLUTE PROJECT FOLDER PATH HERE ---
-BASE_DIR = "/Users/naitripanchal/Downloads/multimodal-demand-forecasting-slm"
+# --- AUTOMATIC ZIP EXTRACTION FOR CLOUD DEPLOYMENT ---
+# If your zip files are named domain_models_batch1.zip and domain_models_batch2.zip
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+for batch_name in ["domain_models_batch1", "domain_models_batch2"]:
+    extracted_path = os.path.join(BASE_DIR, batch_name)
+    zip_path = os.path.join(BASE_DIR, f"{batch_name}.zip")
+    
+    # If the unzipped folder doesn't exist yet, but the zip file does, extract it!
+    if not os.path.exists(extracted_path) and os.path.exists(zip_path):
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            zip_ref.extractall(BASE_DIR)
 
 @st.cache_resource
 def load_available_categories():
@@ -27,7 +38,7 @@ category_map = load_available_categories()
 categories = sorted(list(category_map.keys()))
 
 if not categories:
-    st.error(f"No model artifacts found in: `{BASE_DIR}`. Please verify your folder path.")
+    st.error(f"No model artifacts found! Please ensure your zip files are named `domain_models_batch1.zip` and `domain_models_batch2.zip` in the root folder.")
 else:
     selected_display_name = st.selectbox("Select Product Domain Category:", categories)
     selected_filepath = category_map[selected_display_name]
@@ -46,15 +57,15 @@ else:
         st.subheader("Forecast Engine Output")
         if st.button("Generate Demand Forecast", type="primary"):
             if os.path.exists(selected_filepath):
-                # Lazy-load the model
                 model = joblib.load(selected_filepath)
                 mock_sentiment_index = 8.8 
                 
-                # Check how many features this specific model was trained with
-                n_features = getattr(model, "n_features_in_", 1)
+                try:
+                    n_feats = getattr(model, "n_features_in_", 1)
+                except Exception:
+                    n_feats = 1
 
-                # Dynamically format input to match what the model expects
-                if n_features == 1:
+                if n_feats == 1:
                     prediction_input = [[recent_sales_lag]]
                 else:
                     prediction_input = [[recent_sales_lag, mock_sentiment_index]]
