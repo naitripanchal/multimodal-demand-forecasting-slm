@@ -16,3 +16,7 @@ matplotlib
 # Notebook
 jupyter
 ipykernel
+streamlit
+joblib
+scikit-learn
+pandas
